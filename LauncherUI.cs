@@ -1,0 +1,25 @@
+using System;using System.Diagnostics;using System.Drawing;using System.IO;using System.Threading.Tasks;using System.Windows.Forms;
+static class Program {
+ [STAThread]static void Main(string[] args){if(args.Length>0&&args[0]=="--self-test"){Injector.SelfTest();return;}Application.EnableVisualStyles();if(args.Length==2&&args[0]=="--preview"){using(var form=new ToolForm()){form.StartPosition=FormStartPosition.Manual;form.Location=new Point(-32000,-32000);form.Show();Application.DoEvents();using(var image=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(image,new Rectangle(Point.Empty,image.Size));image.Save(args[1],System.Drawing.Imaging.ImageFormat.Png);}}return;}Application.Run(new ToolForm());}
+}
+sealed class ToolForm:Form {
+ const string ToolName="Shadow Drift",DllName="Shadow-Drift.Mod.dll",DefaultKey="F8";
+ Label status;Button load,unload;ComboBox keys;bool busy;
+ public ToolForm(){using(var iconStream=typeof(ToolForm).Assembly.GetManifestResourceStream("App.Icon.ico")){if(iconStream!=null)using(var icon=new Icon(iconStream)){Icon=(Icon)icon.Clone();}}Text=ToolName+" · by rez";ClientSize=new Size(640,520);MinimumSize=Size;MaximumSize=Size;MaximizeBox=false;StartPosition=FormStartPosition.CenterScreen;BackColor=Color.FromArgb(21,17,28);ForeColor=Color.FromArgb(241,235,243);Font=new Font("Segoe UI",10);
+ Controls.Add(new Label{Text=ToolName,Font=new Font("Segoe UI",23,FontStyle.Bold),Location=new Point(36,40),Size=new Size(570,65)});
+ Controls.Add(new Label{Text="Follow a recorded drift line with adjustable delay.\nSelect a leader in a multiplayer lobby.",Location=new Point(40,112),Size=new Size(540,62)});
+ Controls.Add(new Label{Text="Menu key",Location=new Point(40,192),AutoSize=true});keys=new ComboBox{ForeColor=Color.FromArgb(30,20,32),BackColor=Color.FromArgb(241,235,243),DropDownStyle=ComboBoxStyle.DropDownList,Location=new Point(40,222),Size=new Size(210,30)};keys.Items.AddRange(new object[]{"F1","F2","F3","F4","F5","F6","F7","F8","F11","F12","Insert","Home","PageUp","PageDown"});keys.SelectedItem=RcliSettings.Get("menu.hotkey",DefaultKey);if(keys.SelectedIndex<0)keys.SelectedItem=DefaultKey;keys.SelectedIndexChanged+=delegate{try{RcliSettings.Set("menu.hotkey",Convert.ToString(keys.SelectedItem));status.Text="Menu key saved. The loaded tool updates within a second.\nIf the other tool uses that key, choose a different one.";}catch(Exception e){status.Text=e.Message;}};keys.DrawMode=DrawMode.OwnerDrawFixed;keys.DrawItem+=delegate(object sender,DrawItemEventArgs e){e.DrawBackground();if(e.Index>=0)using(var brush=new SolidBrush(Color.FromArgb(30,20,32)))e.Graphics.DrawString(Convert.ToString(keys.Items[e.Index]),keys.Font,brush,e.Bounds);e.DrawFocusRectangle();};Controls.Add(keys);Shown+=delegate{keys.SelectedIndex=keys.FindStringExact(RcliSettings.Get("menu.hotkey",DefaultKey));if(keys.SelectedIndex<0)keys.SelectedIndex=keys.FindStringExact(DefaultKey);};
+ status=new Label{Text="Start CarX, then load the tool.\nChange the menu key here or inside the game.",Location=new Point(40,279),Size=new Size(540,88)};Controls.Add(status);
+ load=new Button{Text="Launch CarX & load tool",Location=new Point(40,380),Size=new Size(330,48),FlatStyle=FlatStyle.Flat,BackColor=Color.FromArgb(154,34,69)};unload=new Button{Text="Unload tool",Location=new Point(382,380),Size=new Size(198,48),FlatStyle=FlatStyle.Flat};Controls.Add(load);Controls.Add(unload);
+ Controls.Add(new Label{Text="by rez    /    F9  STOP",Location=new Point(40,482),AutoSize=true});load.Click+=async delegate{await Run(false);};unload.Click+=async delegate{await Run(true);};FormClosing+=delegate(object s,FormClosingEventArgs e){if(busy)e.Cancel=true;};}
+ async Task Run(bool remove){if(busy)return;busy=true;load.Enabled=unload.Enabled=false;try{if(!remove){if(!File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,DllName)))throw new Exception("Keep "+DllName+" beside the launcher.");var processes=Process.GetProcessesByName("Drift Racing Online");bool running=processes.Length>0;foreach(var p in processes)p.Dispose();if(!running){Process.Start(new ProcessStartInfo("steam://rungameid/635260"){UseShellExecute=true});status.Text="Starting CarX through Steam. Complete any Steam prompts.";DateTime deadline=DateTime.UtcNow.AddMinutes(5);bool ready=false;while(DateTime.UtcNow<deadline){await Task.Delay(1000);var ps=Process.GetProcessesByName("Drift Racing Online");foreach(var p in ps){using(p){if(p.MainWindowHandle!=IntPtr.Zero)ready=true;}}if(ready)break;}if(!ready)throw new Exception("CarX did not open. Start it through Steam and retry.");await Task.Delay(8000);}}status.Text="Connecting to CarX...";await Task.Run(()=>Injector.Inject(remove));status.Text=remove?"Unload requested. Return to CarX to complete it.":"Loaded. Return to CarX. Menu key: "+RcliSettings.Get("menu.hotkey",DefaultKey)+".\nWait for your car to finish loading before starting movement.";}catch(Exception e){status.Text=e.GetBaseException().Message;}finally{busy=false;load.Enabled=unload.Enabled=true;}}
+}
+
+
+
+
+
+
+
+
+
